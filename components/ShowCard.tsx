@@ -19,9 +19,11 @@ export function ShowCard({ show }: { show: TVShow }) {
       <View style={styles.content}>
         <View>
           <Text numberOfLines={1} style={styles.title}>{show.title}</Text>
-          <Text style={styles.meta}>{show.year} · {show.genres.slice(0, 2).join(', ')}</Text>
+          <Text numberOfLines={1} style={styles.meta}>
+            {show.year ?? 'TBA'}{show.genres.length ? ` · ${show.genres.slice(0, 2).join(', ')}` : ''}
+          </Text>
         </View>
-        <RatingBadge rating={show.rating} />
+        {show.rating !== null ? <RatingBadge rating={show.rating} /> : null}
       </View>
       <AppIcon name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} color={colors.textDim} size={17} />
     </Pressable>

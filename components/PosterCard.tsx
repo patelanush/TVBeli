@@ -22,10 +22,12 @@ export function PosterCard({ show, width = 148 }: Props) {
       style={({ pressed }) => [styles.container, { width }, pressed && styles.pressed]}>
       <View style={[styles.posterFrame, { height: width * 1.48 }]}>
         <Artwork uri={show.posterUrl} title={show.title} accentColor={show.accentColor} style={styles.artwork} />
-        <View style={styles.badge}><RatingBadge rating={show.rating} /></View>
+        {show.rating !== null ? <View style={styles.badge}><RatingBadge rating={show.rating} /></View> : null}
       </View>
       <Text numberOfLines={1} style={styles.title}>{show.title}</Text>
-      <Text style={styles.meta}>{show.year} · {show.seasons} {show.seasons === 1 ? 'season' : 'seasons'}</Text>
+      <Text numberOfLines={1} style={styles.meta}>
+        {show.year ?? 'TBA'}{show.genres[0] ? ` · ${show.genres[0]}` : ''}
+      </Text>
     </Pressable>
   );
 }

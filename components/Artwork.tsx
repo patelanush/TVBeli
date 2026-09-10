@@ -5,22 +5,23 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { colors } from '@/constants/theme';
 
 type Props = {
-  uri: string;
+  uri: string | null | undefined;
   title: string;
   accentColor: string;
   style?: StyleProp<ViewStyle>;
   blurRadius?: number;
+  fallbackMark?: string;
 };
 
-export function Artwork({ uri, title, accentColor, style, blurRadius }: Props) {
+export function Artwork({ uri, title, accentColor, style, blurRadius, fallbackMark = 'TV' }: Props) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  const failed = failedUri === uri;
+  const failed = !uri || failedUri === uri;
 
   return (
     <View style={[styles.container, { backgroundColor: accentColor }, style]}>
       {!failed ? (
         <Image
-          source={uri}
+          source={uri!}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           transition={250}
@@ -31,7 +32,7 @@ export function Artwork({ uri, title, accentColor, style, blurRadius }: Props) {
         />
       ) : (
         <View style={styles.fallback}>
-          <Text style={styles.fallbackMark}>TV</Text>
+          <Text style={styles.fallbackMark}>{fallbackMark}</Text>
           <Text numberOfLines={2} style={styles.fallbackTitle}>{title}</Text>
         </View>
       )}

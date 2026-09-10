@@ -1,65 +1,110 @@
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { AppIcon } from '@/components/AppIcon';
+import { FeedbackState } from '@/components/FeedbackState';
 import { PosterCard } from '@/components/PosterCard';
 import { Screen } from '@/components/Screen';
 import { colors, radii, spacing } from '@/constants/theme';
-import { shows } from '@/data/shows';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { searchTv } from '@/services/tmdb';
+import { TVShow } from '@/types/show';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState<TVShow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [settledRequest, setSettledRequest] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+  const searchTerm = query.trim();
+  const debouncedQuery = useDebouncedValue(searchTerm, 400);
+  const requestKey = debouncedQuery ? `${debouncedQuery}:${retryKey}` : '';
+  const loading = Boolean(searchTerm) && (debouncedQuery !== searchTerm || settledRequest !== requestKey);
   const { width } = useWindowDimensions();
   const posterWidth = Math.min(164, (width - spacing.md * 3) / 2);
-  const filteredShows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return shows;
-    return shows.filter((show) => `${show.title} ${show.genres.join(' ')}`.toLowerCase().includes(term));
-  }, [query]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (!debouncedQuery || debouncedQuery !== searchTerm) return () => controller.abort();
+
+    searchTv(debouncedQuery, controller.signal)
+      .then((shows) => {
+        setResults(shows);
+        setError(null);
+        setSettledRequest(requestKey);
+      })
+      .catch((requestError: unknown) => {
+        if (requestError instanceof Error && requestError.name !== 'AbortError') {
+          setResults([]);
+          setError(requestError.message);
+          setSettledRequest(requestKey);
+        }
+      });
+
+    return () => controller.abort();
+  }, [debouncedQuery, requestKey, searchTerm]);
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (!value.trim()) {
+      setResults([]);
+      setError(null);
+      setSettledRequest('');
+    }
+  };
+
+  const handleRetry = () => {
+    setError(null);
+    setRetryKey((key) => key + 1);
+  };
+
+  const renderEmptyState = () => {
+    if (!query.trim()) {
+      return <FeedbackState title="Search all of television" message="Enter a show name to find it on TMDB." />;
+    }
+    if (loading) return <FeedbackState title="Searching…" message={`Looking for “${debouncedQuery || query.trim()}”`} loading />;
+    if (error) return <FeedbackState title="Search unavailable" message={error} onRetry={handleRetry} />;
+    return <FeedbackState title="No shows found" message={`Try another name or check the spelling of “${debouncedQuery}”.`} />;
+  };
 
   return (
     <Screen>
       <View style={styles.heading}>
         <Text style={styles.title}>Find your next obsession.</Text>
-        <Text style={styles.subtitle}>Search shows and genres</Text>
+        <Text style={styles.subtitle}>Search real TV shows from TMDB</Text>
       </View>
       <View style={styles.searchBox}>
         <AppIcon name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} color={colors.textMuted} size={21} />
         <TextInput
           value={query}
-          onChangeText={setQuery}
-          placeholder="Try “Drama” or “Severance”"
+          onChangeText={handleQueryChange}
+          placeholder="Try “Severance” or “The Bear”"
           placeholderTextColor={colors.textDim}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
           style={styles.input}
-          accessibilityLabel="Search shows"
+          accessibilityLabel="Search TV shows"
         />
+        {loading && results.length > 0 ? <ActivityIndicator color={colors.accent} size="small" /> : null}
         {query ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery('')}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => handleQueryChange('')}>
             <AppIcon name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }} color={colors.textDim} size={20} />
           </Pressable>
         ) : null}
       </View>
       <FlatList
-        data={filteredShows}
-        keyExtractor={(item) => item.id}
+        data={results}
+        keyExtractor={(item) => String(item.id)}
         numColumns={2}
-        columnWrapperStyle={styles.columns}
-        contentContainerStyle={[styles.grid, !filteredShows.length && styles.emptyGrid]}
+        columnWrapperStyle={results.length > 0 ? styles.columns : undefined}
+        contentContainerStyle={[styles.grid, !results.length && styles.emptyGrid]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         renderItem={({ item }) => <View style={styles.gridItem}><PosterCard show={item} width={posterWidth} /></View>}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <AppIcon name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }} color={colors.accent} size={27} />
-            </View>
-            <Text style={styles.emptyTitle}>No shows found</Text>
-            <Text style={styles.emptyCopy}>Try a different title or genre.</Text>
-          </View>
-        }
+        ListEmptyComponent={renderEmptyState}
       />
     </Screen>
   );
@@ -75,8 +120,4 @@ const styles = StyleSheet.create({
   columns: { justifyContent: 'space-between' },
   gridItem: { marginBottom: spacing.lg },
   emptyGrid: { flexGrow: 1 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 100 },
-  emptyIcon: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1B2111', marginBottom: spacing.md },
-  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
-  emptyCopy: { color: colors.textMuted, fontSize: 14, marginTop: 5 },
 });

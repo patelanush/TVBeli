@@ -8,7 +8,7 @@ import { colors } from '@/constants/theme';
 const iconNames = {
   index: { ios: 'house.fill', android: 'home', web: 'home' },
   search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
-  friends: { ios: 'person.2.fill', android: 'group', web: 'group' },
+  myShows: { ios: 'rectangle.stack.fill', android: 'video_library', web: 'video_library' },
   profile: { ios: 'person.crop.circle.fill', android: 'account_circle', web: 'account_circle' },
 } as const;
 
@@ -62,10 +62,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="friends"
+        name="my-shows"
         options={{
-          title: 'Friends',
-          tabBarIcon: ({ color, focused }) => <AppIcon name={iconNames.friends} color={color} size={focused ? 24 : 22} />,
+          title: 'My Shows',
+          tabBarIcon: ({ color, focused }) => <AppIcon name={iconNames.myShows} color={color} size={focused ? 24 : 22} />,
         }}
       />
       <Tabs.Screen
