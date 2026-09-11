@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/AppIcon';
@@ -12,9 +12,26 @@ const iconNames = {
   profile: { ios: 'person.crop.circle.fill', android: 'account_circle', web: 'account_circle' },
 } as const;
 
+const MOBILE_TAB_BAR_CONTENT_HEIGHT = 63;
+const MOBILE_SCENE_BOTTOM_GUTTER = 28;
+const MOBILE_SAFE_AREA_PADDING = 'max(12px, env(safe-area-inset-bottom))';
+
+// React Native Web passes CSS functions through to the DOM, but ViewStyle only
+// types percentage strings. Keep the CSS safe-area fallback scoped to web.
+const mobileWebTabBarStyle = {
+  height: `calc(${MOBILE_TAB_BAR_CONTENT_HEIGHT}px + ${MOBILE_SAFE_AREA_PADDING})`,
+  paddingBottom: MOBILE_SAFE_AREA_PADDING,
+} as unknown as ViewStyle;
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const desktop = useWindowDimensions().width >= 900;
+  const mobileTabBarStyle = Platform.OS === 'web'
+    ? mobileWebTabBarStyle
+    : {
+        height: MOBILE_TAB_BAR_CONTENT_HEIGHT + Math.max(12, insets.bottom),
+        paddingBottom: Math.max(12, insets.bottom),
+      };
 
   return (
     <Tabs
@@ -22,20 +39,24 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.textDim,
-        tabBarStyle: {
-          height: desktop ? '100%' : 63 + insets.bottom,
-          width: desktop ? 220 : undefined,
-          paddingTop: desktop ? 28 : 7,
-          paddingBottom: desktop ? 28 : Math.max(insets.bottom, 8),
-          backgroundColor: '#0D0F13',
-          borderTopColor: colors.border,
-          borderTopWidth: desktop ? 0 : StyleSheet.hairlineWidth,
-          borderRightColor: colors.border,
-          borderRightWidth: desktop ? StyleSheet.hairlineWidth : 0,
-        },
+        tabBarStyle: [
+          {
+            height: desktop ? '100%' : undefined,
+            width: desktop ? 220 : undefined,
+            paddingTop: desktop ? 28 : 7,
+            paddingBottom: desktop ? 28 : undefined,
+            backgroundColor: '#0D0F13',
+            borderTopColor: colors.border,
+            borderTopWidth: desktop ? 0 : StyleSheet.hairlineWidth,
+            borderRightColor: colors.border,
+            borderRightWidth: desktop ? StyleSheet.hairlineWidth : 0,
+          },
+          !desktop && mobileTabBarStyle,
+        ],
         tabBarPosition: desktop ? 'left' : 'bottom',
         tabBarItemStyle: desktop ? { maxHeight: 64 } : undefined,
         tabBarLabelStyle: { fontSize: desktop ? 13 : 10, fontWeight: '700' },
+        sceneStyle: desktop ? undefined : styles.mobileScene,
       }}>
       <Tabs.Screen
         name="index"
@@ -86,6 +107,8 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  // Clears the portion of the floating Rate button that extends above the bar.
+  mobileScene: { paddingBottom: MOBILE_SCENE_BOTTOM_GUTTER },
   rateIcon: {
     width: 52,
     height: 52,
