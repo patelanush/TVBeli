@@ -8,14 +8,27 @@ type Props = {
   message: string;
   loading?: boolean;
   onRetry?: () => void;
+  offline?: boolean;
+  icon?: Parameters<typeof AppIcon>[0]['name'];
 };
 
-export function FeedbackState({ title, message, loading = false, onRetry }: Props) {
+const offlineIcon: Parameters<typeof AppIcon>[0]['name'] = {
+  ios: 'wifi.exclamationmark', android: 'wifi_off', web: 'wifi_off',
+};
+const neutralIcon: Parameters<typeof AppIcon>[0]['name'] = {
+  ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome',
+};
+const errorIcon: Parameters<typeof AppIcon>[0]['name'] = {
+  ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning',
+};
+
+export function FeedbackState({ title, message, loading = false, onRetry, offline = false, icon }: Props) {
+  const feedbackIcon = offline ? offlineIcon : icon ?? (onRetry ? errorIcon : neutralIcon);
   return (
     <View style={styles.container}>
       <View style={styles.icon}>
         {loading ? <ActivityIndicator color={colors.accent} /> : (
-          <AppIcon name={{ ios: 'wifi.exclamationmark', android: 'wifi_off', web: 'wifi_off' }} color={colors.accent} size={27} />
+          <AppIcon name={feedbackIcon} color={colors.accent} size={27} />
         )}
       </View>
       <Text style={styles.title}>{title}</Text>

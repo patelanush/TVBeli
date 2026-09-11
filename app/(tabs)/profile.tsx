@@ -21,14 +21,14 @@ export default function ProfileScreen() {
     <View style={styles.header}><View><Text style={styles.title}>Your TV stats</Text><Text style={styles.subtitle}>Built from your synced TVBeli ranking</Text></View><View style={styles.icon}><AppIcon name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }} color={colors.accent} size={23} /></View></View>
     {!cloud.online ? <Text style={styles.syncNotice}>Offline · viewing cached data</Text> : cloud.fromCache ? <Text style={styles.syncNotice}>Syncing cloud changes…</Text> : null}
     {library.loading ? <FeedbackState title="Calculating your stats…" message="Reading your cloud library." loading /> : null}
-    {!library.loading && library.error ? <FeedbackState title="Stats unavailable" message={library.error} onRetry={library.retry} /> : null}
+    {!library.loading && library.error ? <FeedbackState title="Stats unavailable" message={library.error} onRetry={library.retry} offline={!library.online} /> : null}
     {!library.loading && !library.error && stats ? <>
       <View style={styles.stats}>
         <Stat value={stats.watched} label="Watched" border /><Stat value={stats.totalRanked} label="Ranked" border /><Stat value={stats.watching} label="Watching" border /><Stat value={stats.wantToWatch} label="Watchlist" />
       </View>
       <View style={styles.average}><View><Text style={styles.averageLabel}>AVERAGE TVBELI SCORE</Text><Text style={styles.averageCopy}>{stats.totalRanked ? `Across ${stats.totalRanked} ranked ${stats.totalRanked === 1 ? 'show' : 'shows'}` : 'Rank a watched show to get started'}</Text></View><View style={styles.averageValue}><Text style={styles.averageNumber}>{stats.averageScore === null ? '—' : stats.averageScore.toFixed(1)}</Text></View></View>
       <View style={styles.reactions}>{REACTION_ORDER.map((reaction) => <View key={reaction} style={styles.reactionStat}><Text style={styles.reactionEmoji}>{REACTIONS[reaction].emoji}</Text><Text style={styles.reactionValue}>{stats.counts[reaction]}</Text><Text style={styles.reactionLabel}>{REACTIONS[reaction].shortLabel}</Text></View>)}</View>
-      <View style={styles.ranking}><SectionHeader title="Top Shows" />{top.length ? <View style={styles.list}>{top.map((item) => <SavedShowCard key={item.saved.tmdbId} item={item} />)}</View> : <FeedbackState title="Your Top Shows will live here" message="Rate and compare watched shows to build your ranking." />}</View>
+      <View style={styles.ranking}><SectionHeader title="Top Shows" />{top.length ? <View style={styles.list}>{top.map((item) => <SavedShowCard key={item.saved.tmdbId} item={item} />)}</View> : <FeedbackState title="Your Top Shows will live here" message="Rate and compare watched shows to build your ranking." offline={!library.online} icon={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} />}</View>
       {library.metadataError ? <Text style={styles.notice}>Some TMDB artwork is temporarily unavailable. Your cloud ranking is still safe.</Text> : null}
       <TmdbAttribution />
       <Pressable accessibilityRole="button" onPress={() => void cloud.signOut()} style={styles.signOut}><Text style={styles.signOutText}>Sign out</Text></Pressable>

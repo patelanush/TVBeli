@@ -28,7 +28,7 @@ export default function RateScreen() {
           <Pressable accessibilityRole="button" onPress={() => router.push('/rankings' as Href)} style={({ pressed }) => [styles.allAction, pressed && styles.pressed]}><AppIcon name={{ ios: 'list.number', android: 'format_list_numbered', web: 'format_list_numbered' }} color={colors.accent} size={22} /><Text style={styles.allText}>All Rankings</Text></Pressable>
         </View>
         {library.loading ? <FeedbackState title="Loading your ranking…" message="Syncing your cloud library." loading /> : null}
-        {!library.loading && library.error ? <FeedbackState title="Ranking unavailable" message={library.error} onRetry={library.retry} /> : null}
+        {!library.loading && library.error ? <FeedbackState title="Ranking unavailable" message={library.error} onRetry={library.retry} offline={!library.online} /> : null}
         {!library.loading && !library.error ? (
           <>
             <View style={styles.section}><SectionHeader title="Rate & Rank" />{unranked.length ? <View style={styles.list}>{unranked.slice(0, 6).map((item) => <SavedShowCard key={item.saved.tmdbId} item={item} rankAction />)}</View> : <EmptyCard title="You’re caught up" copy="Watched shows that still need ranking will appear here." />}</View>

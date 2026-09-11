@@ -45,8 +45,13 @@ export default function MyShowsScreen() {
       ListEmptyComponent={library.loading
         ? <FeedbackState title="Loading your shows…" message="Opening your cloud library." loading />
         : library.error
-          ? <FeedbackState title="Library unavailable" message={library.error} onRetry={library.retry} />
-          : <FeedbackState title={library.items.length ? 'Nothing in this section' : 'Your library is ready'} message={library.items.length ? 'Choose another filter to see your saved shows.' : 'Search for a show, then choose Watched, Watching, or Want to Watch.'} />}
+          ? <FeedbackState title="Library unavailable" message={library.error} onRetry={library.retry} offline={!library.online} />
+          : <FeedbackState
+              title={library.items.length ? 'Nothing in this section' : 'Your library is ready'}
+              message={library.items.length ? 'Choose another filter to see your saved shows.' : 'Search for a show, then choose Watched, Watching, or Want to Watch.'}
+              offline={!library.online}
+              icon={{ ios: 'rectangle.stack.badge.plus', android: 'library_add', web: 'library_add' }}
+            />}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     />

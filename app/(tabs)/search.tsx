@@ -61,11 +61,11 @@ export default function SearchScreen() {
 
   const renderEmptyState = () => {
     if (!query.trim()) {
-      return <FeedbackState title="Search all of television" message="Enter a show name to find it on TMDB." />;
+      return <FeedbackState title="Search all of television" message="Enter a show name to find it on TMDB." icon={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} />;
     }
     if (loading) return <FeedbackState title="Searching…" message={`Looking for “${debouncedQuery || query.trim()}”`} loading />;
     if (error) return <FeedbackState title="Search unavailable" message={error} onRetry={handleRetry} />;
-    return <FeedbackState title="No shows found" message={`Try another name or check the spelling of “${debouncedQuery}”.`} />;
+    return <FeedbackState title="No shows found" message={`Try another name or check the spelling of “${debouncedQuery}”.`} icon={{ ios: 'magnifyingglass', android: 'search_off', web: 'search_off' }} />;
   };
 
   return (
