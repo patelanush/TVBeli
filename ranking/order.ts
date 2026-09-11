@@ -1,5 +1,6 @@
 import { REACTION_ORDER, REACTIONS } from '../constants/reactions';
 import type { PreferenceGroup, RankingInfo } from '../types/ranking';
+import { calculateTargetScore, recomputeRankingScores } from './scores';
 
 export function sortPreferenceGroups(groups: readonly PreferenceGroup[]): PreferenceGroup[] {
   return [...groups].sort((a, b) => REACTION_ORDER.indexOf(a.reaction) - REACTION_ORDER.indexOf(b.reaction) || a.sortOrder - b.sortOrder);
@@ -9,7 +10,7 @@ export function sortPreferenceGroups(groups: readonly PreferenceGroup[]): Prefer
 export function buildRankings(groups: readonly PreferenceGroup[]): RankingInfo[] {
   const rankings: RankingInfo[] = [];
   let precedingShows = 0;
-  for (const group of sortPreferenceGroups(groups)) {
+  for (const group of recomputeRankingScores(groups)) {
     for (const member of [...group.members].sort((a, b) => a.tmdbId - b.tmdbId)) {
       rankings.push({
         tmdbId: member.tmdbId,
@@ -26,7 +27,10 @@ export function buildRankings(groups: readonly PreferenceGroup[]): RankingInfo[]
   return rankings;
 }
 
-export function assertRankingIntegrity(groups: readonly PreferenceGroup[]): void {
+export function assertRankingIntegrity(
+  groups: readonly PreferenceGroup[],
+  options: { allowHistoricalScores?: boolean } = {},
+): void {
   const groupIds = new Set<number>();
   const tmdbIds = new Set<number>();
   for (const group of groups) {
@@ -55,6 +59,9 @@ export function assertRankingIntegrity(groups: readonly PreferenceGroup[]): void
       }
       if (reaction === 'LOVE' && (index === 0 ? group.displayedScoreTenths !== 100 : group.displayedScoreTenths > 99)) {
         throw new Error('Only the top LOVE preference group receives 10.0.');
+      }
+      if (!options.allowHistoricalScores && group.displayedScoreTenths !== calculateTargetScore(reaction, index, tier.length)) {
+        throw new Error('A displayed score must be derived from its current preference position.');
       }
     });
   }

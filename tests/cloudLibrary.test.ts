@@ -9,6 +9,7 @@ import {
   applyStatusMutation,
   createEmptyLibrary,
   getLibraryStatsFromState,
+  normalizeLibrary,
 } from '../cloud/libraryState';
 import { buildRankings } from '../ranking/order';
 
@@ -70,4 +71,17 @@ test('cloud statistics are derived from authoritative preference order', () => {
   state = applyRankingMutation(state, { tmdbId: 2, reaction: 'LIKE', placement: { kind: 'insert', index: 0 }, expectedRevision: state.rankingRevision }, now);
   const stats = getLibraryStatsFromState(state);
   assert.deepEqual({ watched: stats.watched, ranked: stats.totalRanked, love: stats.counts.LOVE, like: stats.counts.LIKE, watchlist: stats.wantToWatch }, { watched: 2, ranked: 2, love: 1, like: 1, watchlist: 1 });
+});
+
+test('normalization migrates valid sticky scores to canonical ranking-derived scores', () => {
+  let state = watched([1, 2, 3]);
+  state = applyRankingMutation(state, { tmdbId: 1, reaction: 'LIKE', placement: { kind: 'insert', index: 0 }, expectedRevision: state.rankingRevision }, now);
+  state = applyRankingMutation(state, { tmdbId: 2, reaction: 'LIKE', placement: { kind: 'insert', index: 1 }, expectedRevision: state.rankingRevision }, now);
+  state = applyRankingMutation(state, { tmdbId: 3, reaction: 'LIKE', placement: { kind: 'insert', index: 2 }, expectedRevision: state.rankingRevision }, now);
+  state.rankingGroups.forEach((group) => { group.displayedScoreTenths = 84; });
+
+  const normalized = normalizeLibrary(state);
+
+  assert.deepEqual(normalized.rankingGroups.map((group) => group.displayedScoreTenths), [84, 83, 82]);
+  assert.deepEqual(state.rankingGroups.map((group) => group.displayedScoreTenths), [84, 84, 84]);
 });

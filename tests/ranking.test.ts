@@ -213,51 +213,31 @@ describe('true ties and competition ranks', () => {
   });
 });
 
-describe('sticky recalibration', () => {
-  it('updates ranks immediately while a one-position shift usually keeps an existing score', () => {
+describe('deterministic score recomputation', () => {
+  it('recomputes every score in a tier after an insertion shifts the ranking', () => {
     const original = makeTier('LOVE', 4);
     const changed = insertAt(original, 20, 'LOVE', 0);
     assert.equal(buildRankings(changed).find((ranking) => ranking.tmdbId === 3)?.overallRank, 4);
-    assert.equal(memberGroup(changed, 3).displayedScoreTenths, 98);
-    assert.equal(memberGroup(changed, 1).displayedScoreTenths, 99); // Exclusive 10.0 exception.
+    assert.deepEqual(changed.map((group) => group.displayedScoreTenths), [100, 99, 98, 97, 96]);
+    assert.equal(memberGroup(changed, 3).displayedScoreTenths, 97);
     assertRankingIntegrity(changed);
   });
 
-  it('moves by one tenth once accumulated movement reaches two tenths', () => {
-    const original = makeTier('LOVE', 4);
-    const once = insertAt(original, 20, 'LOVE', 0);
-    const twice = insertAt(once, 21, 'LOVE', 0);
-    assert.equal(memberGroup(once, 3).displayedScoreTenths, 98);
-    assert.equal(calculateTargetScore('LOVE', memberGroup(twice, 3).sortOrder, twice.length), 96);
-    assert.equal(memberGroup(twice, 3).displayedScoreTenths, 97);
-    assertRankingIntegrity(twice);
-  });
-
-  it('moves existing non-top groups no more than one tenth despite large target distance', () => {
+  it('replaces historical sticky values with exact position targets', () => {
     const groups = makeTier('LIKE', 4);
     groups.forEach((group) => { group.displayedScoreTenths = 70; });
     const recalibrated = recalibrateTier(groups);
-    assert.deepEqual(recalibrated.map((group) => group.displayedScoreTenths), [71, 71, 71, 71]);
+    assert.deepEqual(recalibrated.map((group) => group.displayedScoreTenths), [84, 83, 82, 81]);
     assert.deepEqual(groups.map((group) => group.displayedScoreTenths), [70, 70, 70, 70]);
   });
 
-  it('clamps a new target upward to preserve a stickier worse neighbor', () => {
+  it('does not let prior scores constrain a newly inserted score', () => {
     const groups = makeTier('LIKE', 5);
     groups.forEach((group) => { group.displayedScoreTenths = 84; });
     const changed = insertAt(groups, 20, 'LIKE', 2);
     assert.equal(calculateTargetScore('LIKE', 2, 6), 82);
-    assert.equal(memberGroup(changed, 20).displayedScoreTenths, 83);
-    for (const old of groups) assert.ok(Math.abs(memberGroup(changed, old.members[0].tmdbId).displayedScoreTenths - old.displayedScoreTenths) <= 1);
-    assertRankingIntegrity(changed);
-  });
-
-  it('clamps a new target downward to preserve a stickier better neighbor', () => {
-    const groups = makeTier('LIKE', 3);
-    [80, 79, 78].forEach((score, index) => { groups[index].displayedScoreTenths = score; });
-    const changed = insertAt(groups, 20, 'LIKE', 1);
-    assert.equal(calculateTargetScore('LIKE', 1, 4), 83);
-    assert.equal(memberGroup(changed, 20).displayedScoreTenths, 81);
-    assert.equal(memberGroup(changed, 1).displayedScoreTenths, 81);
+    assert.equal(memberGroup(changed, 20).displayedScoreTenths, 82);
+    assert.deepEqual(changed.map((group) => group.displayedScoreTenths), [84, 83, 82, 81, 80, 79]);
     assertRankingIntegrity(changed);
   });
 
@@ -274,18 +254,41 @@ describe('sticky recalibration', () => {
     assert.equal(buildRankings(groups).filter((ranking) => ranking.scoreTenths === 100).length, 2);
   });
 
-  it('does not change scores or unrelated timestamps for tie-only or no-op updates', () => {
+  it('recomputes a tier after tie-only and same-position updates', () => {
     const groups = makeTier('LIKE', 4);
     groups.forEach((group) => { group.displayedScoreTenths = 84; });
     const tied = placeShow(groups, { tmdbId: 20, reaction: 'LIKE', placement: { kind: 'tie', groupId: 2 } }, NOW);
-    assert.deepEqual(tied.map((group) => group.displayedScoreTenths), [84, 84, 84, 84]);
+    assert.deepEqual(tied.map((group) => group.displayedScoreTenths), [84, 83, 82, 81]);
     assert.equal(tied[0].updatedAt, THEN);
     assert.equal(tied[1].updatedAt, NOW);
     const noop = placeShow(groups, { tmdbId: 2, reaction: 'LIKE', placement: { kind: 'insert', index: 1 } }, NOW);
     assert.equal(noop[1].id, 2);
     assert.equal(noop[1].createdAt, THEN);
-    assert.deepEqual(noop.map((group) => group.displayedScoreTenths), [84, 84, 84, 84]);
+    assert.deepEqual(noop.map((group) => group.displayedScoreTenths), [84, 83, 82, 81]);
   });
+
+  for (const reaction of REACTION_ORDER) {
+    it(`produces identical ${reaction} scores for A, B, C regardless of insertion history`, () => {
+      const build = (insertions: readonly [number, number][]) => insertions.reduce(
+        (groups, [tmdbId, index]) => insertAt(groups, tmdbId, reaction, index),
+        [] as PreferenceGroup[],
+      );
+      const histories = [
+        build([[101, 0], [102, 1], [103, 2]]),
+        build([[103, 0], [102, 0], [101, 0]]),
+        build([[102, 0], [103, 1], [101, 0]]),
+      ];
+      const finalRankings = histories.map((groups) => buildRankings(groups).map(({ tmdbId, reaction: tier, scoreTenths, overallRank }) => ({
+        tmdbId,
+        reaction: tier,
+        scoreTenths,
+        overallRank,
+      })));
+      assert.deepEqual(finalRankings[0].map((ranking) => ranking.tmdbId), [101, 102, 103]);
+      assert.deepEqual(finalRankings[1], finalRankings[0]);
+      assert.deepEqual(finalRankings[2], finalRankings[0]);
+    });
+  }
 });
 
 describe('re-ranking, reaction changes, and removal', () => {
@@ -342,6 +345,29 @@ describe('re-ranking, reaction changes, and removal', () => {
       assertRankingIntegrity(changed);
     });
   }
+
+  it('recomputes both tiers after a reaction change', () => {
+    const groups = [...makeTier('LOVE', 3), ...makeTier('LIKE', 3, 10)];
+    groups.filter((group) => group.reaction === 'LOVE').forEach((group, index) => { group.displayedScoreTenths = index === 0 ? 100 : 99; });
+    groups.filter((group) => group.reaction === 'LIKE').forEach((group) => { group.displayedScoreTenths = 84; });
+
+    const changed = placeShow(groups, { tmdbId: 2, reaction: 'LIKE', placement: { kind: 'insert', index: 1 } }, NOW);
+
+    assert.deepEqual(changed.filter((group) => group.reaction === 'LOVE').map((group) => group.displayedScoreTenths), [100, 99]);
+    assert.deepEqual(changed.filter((group) => group.reaction === 'LIKE').map((group) => group.displayedScoreTenths), [84, 83, 82, 81]);
+    assertRankingIntegrity(changed);
+  });
+
+  it('recomputes the remaining tier after a removal', () => {
+    const groups = makeTier('LIKE', 5);
+    groups.forEach((group) => { group.displayedScoreTenths = 84; });
+
+    const changed = removeShow(groups, 3, NOW);
+
+    assert.deepEqual(changed.map((group) => group.members[0].tmdbId), [1, 2, 4, 5]);
+    assert.deepEqual(changed.map((group) => group.displayedScoreTenths), [84, 83, 82, 81]);
+    assertRankingIntegrity(changed);
+  });
 
   it('cleans up empty tiers and compacts ordering when removing singletons', () => {
     const original = [...makeTier('LOVE', 3), ...makeTier('LIKE', 1, 10)];

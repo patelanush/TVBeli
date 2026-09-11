@@ -1,6 +1,7 @@
 import { REACTION_ORDER } from '@/constants/reactions';
 import { placeShow, removeShow } from '@/ranking/mutations';
 import { assertRankingIntegrity, buildRankings, sortPreferenceGroups } from '@/ranking/order';
+import { recomputeRankingScores } from '@/ranking/scores';
 import type { CloudLibraryDocument } from '@/cloud/types';
 import { CLOUD_LIBRARY_SCHEMA_VERSION } from '@/cloud/types';
 import { NeedsUnrankConfirmationError, StaleRankingError, WatchedShowRequiredError } from '@/cloud/errors';
@@ -61,6 +62,10 @@ export function normalizeLibrary(value: unknown): CloudLibraryDocument {
     rankingGroups: sortPreferenceGroups(state.rankingGroups ?? []),
     updatedAt: state.updatedAt,
   };
+  // Accept valid scores written by the former sticky model, then derive the
+  // canonical scores from preference order before exposing or mutating state.
+  assertRankingIntegrity(normalized.rankingGroups, { allowHistoricalScores: true });
+  normalized.rankingGroups = recomputeRankingScores(normalized.rankingGroups);
   assertLibraryIntegrity(normalized);
   return cloneLibrary(normalized);
 }

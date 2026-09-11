@@ -12,10 +12,8 @@ function cloneGroups(groups: readonly PreferenceGroup[]): PreferenceGroup[] {
 function finishMutation(original: readonly PreferenceGroup[], draft: PreferenceGroup[], now: string): PreferenceGroup[] {
   const result: PreferenceGroup[] = [];
   for (const reaction of REACTION_ORDER) {
-    const before = original.filter((group) => group.reaction === reaction).sort((a, b) => a.sortOrder - b.sortOrder);
     const tier = draft.filter((group) => group.reaction === reaction).map((group, sortOrder) => ({ ...group, sortOrder }));
-    const structureChanged = before.length !== tier.length || before.some((group, index) => group.id !== tier[index]?.id);
-    const adjusted = structureChanged ? recalibrateTier(tier, new Set(tier.filter((group) => group.id === -1).map((group) => group.id))) : tier;
+    const adjusted = recalibrateTier(tier);
 
     for (const group of adjusted) {
       const previous = original.find((item) => item.id === group.id);
@@ -30,7 +28,7 @@ function finishMutation(original: readonly PreferenceGroup[], draft: PreferenceG
 
 /** Pure final placement; storage commits its whole result atomically. */
 export function placeShow(groups: readonly PreferenceGroup[], input: PlacementInput, now: string): PreferenceGroup[] {
-  assertRankingIntegrity(groups);
+  assertRankingIntegrity(groups, { allowHistoricalScores: true });
   if (!Number.isSafeInteger(input.tmdbId) || input.tmdbId < 1) throw new Error('Invalid TV show ID.');
   if (!REACTION_ORDER.includes(input.reaction)) throw new Error('Unknown reaction tier.');
   const original = groups.find((group) => group.members.some((member) => member.tmdbId === input.tmdbId));
@@ -69,7 +67,7 @@ export function placeShow(groups: readonly PreferenceGroup[], input: PlacementIn
 
 /** Removing one tied member leaves the other members in the same true tie. */
 export function removeShow(groups: readonly PreferenceGroup[], tmdbId: number, now: string): PreferenceGroup[] {
-  assertRankingIntegrity(groups);
+  assertRankingIntegrity(groups, { allowHistoricalScores: true });
   const remaining = sortPreferenceGroups(cloneGroups(groups))
     .map((group) => ({ ...group, members: group.members.filter((member) => member.tmdbId !== tmdbId) }))
     .filter((group) => group.members.length > 0);
