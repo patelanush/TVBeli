@@ -7,7 +7,7 @@ type HydrationOptions = {
   onBatch?: (items: SavedShowWithMetadata[]) => void;
 };
 
-/** Metadata is optional: personal data remains usable when TMDB is unavailable. */
+/** Metadata is optional: personal data remains usable when TMDB is unavailable . */
 export async function hydrateSavedShows(
   savedShows: SavedShow[],
   rankings: RankingInfo[] = [],
