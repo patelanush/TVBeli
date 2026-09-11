@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/__/auth/:path*", "destination": "https://tvbeli.firebaseapp.com/__/auth/:path*" },
+    { "source": "/((?!api/|__/auth/).*)", "destination": "/index.html" }
   ]
 }

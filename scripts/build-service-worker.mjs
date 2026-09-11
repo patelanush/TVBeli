@@ -5,7 +5,7 @@ await generateSW({
   globPatterns: ['**/*.{js,css,html,svg,png,ico,json,woff2}'],
   swDest: 'dist/sw.js',
   navigateFallback: '/index.html',
-  navigateFallbackDenylist: [/^\/api\//],
+  navigateFallbackDenylist: [/^\/api\//, /^\/__\/auth\//],
   cleanupOutdatedCaches: true,
   clientsClaim: true,
   skipWaiting: true,

@@ -1,9 +1,10 @@
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from 'firebase/auth';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 
 import type { CloudLibraryDocument } from '@/cloud/types';
 import { createEmptyLibrary } from '@/cloud/libraryState';
 import { cloudLibrary, subscribeToLibrary } from '@/services/cloudLibrary';
+import { getFriendlyAuthError, isMobileBrowserEnvironment, SingleFlight } from '@/services/authFlow';
 import { getFirebaseServices, googleProvider, prepareFirebaseAuth } from '@/services/firebase';
 import type { RankingDraft, RankingSnapshot } from '@/types/ranking';
 import type { SavedShowStatus } from '@/types/savedShow';
@@ -15,6 +16,7 @@ type LibraryContextValue = {
   error: string | null;
   fromCache: boolean;
   online: boolean;
+  isSigningIn: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   retry: () => void;
@@ -34,7 +36,9 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const signInFlight = useRef(new SingleFlight());
 
   useEffect(() => {
     const updateOnline = () => setOnline(navigator.onLine);
@@ -50,7 +54,9 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     let unsubscribe = () => {};
     try {
       const { auth, ownerUid } = getFirebaseServices();
-      void prepareFirebaseAuth().catch((cause) => setError(cause instanceof Error ? cause.message : 'Firebase could not start.'));
+      void prepareFirebaseAuth()
+        .then(() => getRedirectResult(auth))
+        .catch((cause) => setError(getFriendlyAuthError(cause)));
       unsubscribe = onAuthStateChanged(auth, (nextUser) => {
         if (nextUser && nextUser.uid !== ownerUid) {
           setError('That Google account is not authorized for this personal TVBeli library.');
@@ -89,6 +95,26 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     return user.uid;
   }, [user]);
 
+  const signIn = useCallback(() => signInFlight.current.run(async () => {
+    setIsSigningIn(true);
+    setError(null);
+    try {
+      const { auth } = getFirebaseServices();
+      await prepareFirebaseAuth();
+      const mobile = isMobileBrowserEnvironment({
+        userAgent: navigator.userAgent,
+        maxTouchPoints: navigator.maxTouchPoints,
+        width: window.innerWidth,
+      });
+      if (mobile) await signInWithRedirect(auth, googleProvider);
+      else await signInWithPopup(auth, googleProvider);
+    } catch (cause) {
+      setError(getFriendlyAuthError(cause));
+    } finally {
+      setIsSigningIn(false);
+    }
+  }), []);
+
   const value = useMemo<LibraryContextValue>(() => ({
     user,
     state,
@@ -96,17 +122,8 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     error,
     fromCache,
     online,
-    signIn: async () => {
-      try {
-        setError(null);
-        const { auth } = getFirebaseServices();
-        await prepareFirebaseAuth();
-        await signInWithPopup(auth, googleProvider);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Google sign-in could not be completed.');
-        throw cause;
-      }
-    },
+    isSigningIn,
+    signIn,
     signOut: async () => signOut(getFirebaseServices().auth),
     retry: () => setRetryKey((key) => key + 1),
     saveStatus: (tmdbId, status, options) => cloudLibrary.saveStatus(requireUser(), tmdbId, status, options),
@@ -117,7 +134,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       const next = await cloudLibrary.commitRanking(requireUser(), draft);
       return { revision: next.rankingRevision, groups: next.rankingGroups };
     },
-  }), [error, fromCache, loading, online, requireUser, state, user]);
+  }), [error, fromCache, isSigningIn, loading, online, requireUser, signIn, state, user]);
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;
 }

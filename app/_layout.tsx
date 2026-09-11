@@ -38,7 +38,7 @@ function AuthGate() {
     return <View style={styles.gate}><ActivityIndicator color={colors.accent} /><Text style={styles.copy}>Opening your TVBeli library…</Text></View>;
   }
   if (!library.user) {
-    return <View style={styles.gate}><Text style={styles.brand}>TVBeli</Text><Text style={styles.title}>Your definitive TV ranking.</Text><Text style={styles.copy}>{library.error ?? 'Sign in with your private Google account to open your cloud library.'}</Text><Pressable accessibilityRole="button" onPress={() => void library.signIn().catch(() => undefined)} style={styles.signIn}><Text style={styles.signInText}>Continue with Google</Text></Pressable></View>;
+    return <View style={styles.gate}><Text style={styles.brand}>TVBeli</Text><Text style={styles.title}>Your definitive TV ranking.</Text><Text style={styles.copy}>{library.error ?? 'Sign in with your private Google account to open your cloud library.'}</Text><Pressable accessibilityRole="button" accessibilityState={{ disabled: library.isSigningIn, busy: library.isSigningIn }} disabled={library.isSigningIn} onPress={() => void library.signIn()} style={[styles.signIn, library.isSigningIn && styles.signInDisabled]}>{library.isSigningIn ? <ActivityIndicator color={colors.black} /> : null}<Text style={styles.signInText}>{library.isSigningIn ? 'Opening Google…' : 'Continue with Google'}</Text></Pressable></View>;
   }
   return <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
   brand: { color: colors.accent, fontSize: 18, fontWeight: '900', letterSpacing: 2 },
   title: { color: colors.text, fontSize: 34, lineHeight: 39, fontWeight: '900', textAlign: 'center', marginTop: 12 },
   copy: { color: colors.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center', maxWidth: 390, marginTop: 12 },
-  signIn: { minWidth: 230, height: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: colors.accent, marginTop: 24 },
+  signIn: { minWidth: 230, height: 54, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: colors.accent, marginTop: 24 },
+  signInDisabled: { opacity: 0.7 },
   signInText: { color: colors.black, fontSize: 15, fontWeight: '900' },
 });

@@ -20,9 +20,12 @@ function required(value: string | undefined, name: string): string {
 
 export function getFirebaseServices(): FirebaseServices {
   if (services) return services;
+  const configuredAuthDomain = required(process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN, 'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN');
   const config = {
     apiKey: required(process.env.EXPO_PUBLIC_FIREBASE_API_KEY, 'EXPO_PUBLIC_FIREBASE_API_KEY'),
-    authDomain: required(process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN, 'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN'),
+    // Firebase's same-origin auth helper proxy avoids Safari's third-party
+    // storage restrictions during mobile redirect sign-in.
+    authDomain: typeof window === 'undefined' ? configuredAuthDomain : window.location.host,
     projectId: required(process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID, 'EXPO_PUBLIC_FIREBASE_PROJECT_ID'),
     storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
