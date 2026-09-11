@@ -3,7 +3,6 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
-    "@react-native-community/slider": "5.2.0",
     "expo": "~57.0.21",
     "expo-constants": "~57.0.17",
     "expo-font": "~57.0.3",
@@ -11,33 +10,40 @@
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
     "expo-router": "~57.0.20",
-    "expo-splash-screen": "~57.0.8",
-    "expo-sqlite": "~57.0.2",
-    "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.2",
-    "expo-web-browser": "~57.0.2",
+    "firebase": "^12.19.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@types/node": "^22.20.2",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~57.0.2",
-    "typescript": "~6.0.3"
+    "firebase-tools": "^15.30.0",
+    "tsx": "^4.23.13",
+    "typescript": "~6.0.3",
+    "workbox-build": "^7.4.1"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "start": "npx vercel dev",
+    "dev": "npx vercel dev",
     "web": "expo start --web",
+    "build:web": "expo export --platform web && node scripts/build-service-worker.mjs",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:rules": "firebase emulators:exec --only firestore \"npm test\"",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build:web",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "private": true
 }

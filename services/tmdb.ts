@@ -7,7 +7,6 @@ import {
 } from '@/types/tmdb';
 import { getBackdropUrl, getLogoUrl, getPosterUrl, getProfileUrl } from '@/utils/tmdbImages';
 
-const API_BASE_URL = 'https://api.themoviedb.org/3';
 const DEFAULT_LANGUAGE = 'en-US';
 const ACCENT_COLORS = ['#E45A50', '#2B77B9', '#C79A57', '#D04435', '#36727A', '#7459AB'];
 const summaryCache = new Map<number, Promise<TVShow>>();
@@ -28,16 +27,6 @@ export class TmdbApiError extends Error {
   }
 }
 
-function getAccessToken() {
-  const token = process.env.EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN?.trim();
-  if (!token) {
-    throw new TmdbApiError(
-      'TMDB is not configured yet. Add EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN to your .env file.',
-    );
-  }
-  return token;
-}
-
 function buildQuery(params: RequestParams = {}) {
   const query = Object.entries({ language: DEFAULT_LANGUAGE, ...params })
     .flatMap(([key, value]) => value === undefined
@@ -49,17 +38,14 @@ function buildQuery(params: RequestParams = {}) {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   try {
-    const response = await fetch(`${API_BASE_URL}${path}${buildQuery(options.params)}`, {
-      headers: {
-        accept: 'application/json',
-        Authorization: `Bearer ${getAccessToken()}`,
-      },
+    const response = await fetch(`/api/tmdb${buildQuery({ path, ...options.params })}`, {
+      headers: { accept: 'application/json' },
       signal: options.signal,
     });
 
     if (!response.ok) {
       const message = response.status === 401
-        ? 'TMDB rejected the access token. Check the value in your .env file.'
+        ? 'TMDB is not configured on the server. Check the Vercel environment variable.'
         : 'TMDB could not load this content. Please try again.';
       throw new TmdbApiError(message, response.status);
     }

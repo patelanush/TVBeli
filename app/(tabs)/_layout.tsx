@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/AppIcon';
@@ -14,6 +14,7 @@ const iconNames = {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const desktop = useWindowDimensions().width >= 900;
 
   return (
     <Tabs
@@ -22,14 +23,19 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.textDim,
         tabBarStyle: {
-          height: 63 + insets.bottom,
-          paddingTop: 7,
-          paddingBottom: Math.max(insets.bottom, 8),
+          height: desktop ? '100%' : 63 + insets.bottom,
+          width: desktop ? 220 : undefined,
+          paddingTop: desktop ? 28 : 7,
+          paddingBottom: desktop ? 28 : Math.max(insets.bottom, 8),
           backgroundColor: '#0D0F13',
           borderTopColor: colors.border,
-          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopWidth: desktop ? 0 : StyleSheet.hairlineWidth,
+          borderRightColor: colors.border,
+          borderRightWidth: desktop ? StyleSheet.hairlineWidth : 0,
         },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700' },
+        tabBarPosition: desktop ? 'left' : 'bottom',
+        tabBarItemStyle: desktop ? { maxHeight: 64 } : undefined,
+        tabBarLabelStyle: { fontSize: desktop ? 13 : 10, fontWeight: '700' },
       }}>
       <Tabs.Screen
         name="index"
@@ -51,7 +57,7 @@ export default function TabLayout() {
           title: 'Rate',
           tabBarLabelStyle: styles.rateLabel,
           tabBarIcon: ({ focused }) => (
-            <View style={[styles.rateIcon, focused && styles.rateIconFocused]}>
+            <View style={[styles.rateIcon, desktop && styles.rateIconDesktop, focused && styles.rateIconFocused]}>
               <AppIcon
                 name={{ ios: 'star.fill', android: 'star', web: 'star' }}
                 color={colors.black}
@@ -96,5 +102,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   rateIconFocused: { backgroundColor: colors.white, transform: [{ scale: 1.04 }] },
+  rateIconDesktop: { marginTop: 0, width: 42, height: 42, borderRadius: 15, borderWidth: 0 },
   rateLabel: { color: colors.text, fontSize: 10, fontWeight: '800' },
 });

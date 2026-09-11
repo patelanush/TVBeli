@@ -16,6 +16,9 @@ export function Screen({ children, style }: Props) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    width: '100%',
+    maxWidth: 1200,
+    alignSelf: 'center',
     backgroundColor: colors.background,
   },
 });

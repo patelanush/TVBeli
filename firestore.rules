@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null
+        && request.auth.uid == userId
+        && request.auth.uid == 'Df5ZxmQcKbgxZk9WkaNkWAQf5kD3';
+    }
+
+    function validShape(data) {
+      return data.keys().hasOnly([
+        'schemaVersion', 'documentVersion', 'rankingRevision', 'nextGroupId',
+        'savedShows', 'rankingGroups', 'updatedAt'
+      ])
+      && data.schemaVersion == 1
+      && data.documentVersion is int
+      && data.documentVersion >= 0
+      && data.rankingRevision is int
+      && data.rankingRevision >= 0
+      && data.nextGroupId is int
+      && data.nextGroupId >= 1
+      && data.savedShows is map
+      && data.rankingGroups is list
+      && data.updatedAt is string;
+    }
+
+    match /tvbeliLibraries/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && validShape(request.resource.data)
+        && request.resource.data.documentVersion == 0
+        && request.resource.data.rankingRevision == 0;
+      allow update: if isOwner(userId)
+        && validShape(request.resource.data)
+        && request.resource.data.documentVersion == resource.data.documentVersion + 1
+        && request.resource.data.rankingRevision >= resource.data.rankingRevision
+        && request.resource.data.rankingRevision <= resource.data.rankingRevision + 1;
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

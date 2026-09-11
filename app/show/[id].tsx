@@ -1,9 +1,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSQLiteContext } from 'expo-sqlite';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/AppIcon';
@@ -11,13 +10,18 @@ import { Artwork } from '@/components/Artwork';
 import { CastCard } from '@/components/CastCard';
 import { FeedbackState } from '@/components/FeedbackState';
 import { RatingBadge } from '@/components/RatingBadge';
-import { PersonalRatingBadge } from '@/components/PersonalRatingBadge';
+import { ReactionBadge } from '@/components/ReactionBadge';
 import { SeasonCard } from '@/components/SeasonCard';
+import { TVBeliScoreBadge } from '@/components/TVBeliScoreBadge';
 import { colors, radii, spacing } from '@/constants/theme';
+import { NeedsUnrankConfirmationError } from '@/cloud/errors';
+import { useLibrary } from '@/contexts/LibraryContext';
+import { buildRankings } from '@/ranking/order';
 import { getTvDetails } from '@/services/tmdb';
-import { deleteSavedShow, getSavedShow, saveShowStatus } from '@/services/savedShows';
+import type { RankingInfo } from '@/types/ranking';
 import { SavedShow } from '@/types/savedShow';
 import { TVShowDetails, WatchStatus } from '@/types/show';
+import { confirmAction, showMessage } from '@/utils/dialogs';
 
 const statusOptions: { value: WatchStatus; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }[] = [
   { value: 'watched', label: 'Watched', icon: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' } },
@@ -47,7 +51,7 @@ function DetailSkeleton() {
 }
 
 export default function ShowDetailScreen() {
-  const db = useSQLiteContext();
+  const library = useLibrary();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const seriesId = Number(id);
@@ -58,42 +62,66 @@ export default function ShowDetailScreen() {
   const [retryKey, setRetryKey] = useState(0);
   const [watchStatus, setWatchStatus] = useState<WatchStatus | undefined>();
   const [savedShow, setSavedShow] = useState<SavedShow | null>(null);
+  const [ranking, setRanking] = useState<RankingInfo | null>(null);
+  const [personalLoading, setPersonalLoading] = useState(validId);
   const [savingStatus, setSavingStatus] = useState(false);
 
   useFocusEffect(useCallback(() => {
-    let active = true;
-    if (validId) {
-      getSavedShow(db, seriesId).then((saved) => {
-        if (active) { setSavedShow(saved); setWatchStatus(saved?.status); }
-      }).catch(() => undefined);
-    }
-    return () => { active = false; };
-  }, [db, seriesId, validId]));
+    if (!validId || !library.state) return;
+    const saved = library.state.savedShows[String(seriesId)] ?? null;
+    setSavedShow(saved);
+    setWatchStatus(saved?.status);
+    setRanking(buildRankings(library.state.rankingGroups).find((item) => item.tmdbId === seriesId) ?? null);
+    setPersonalLoading(false);
+  }, [library.state, seriesId, validId]));
 
-  const handleStatus = async (status: WatchStatus) => {
+  const persistStatus = async (status: WatchStatus, confirmUnrank = false) => {
     if (savingStatus || status === watchStatus) return;
-    const previous = watchStatus;
-    setWatchStatus(status);
     setSavingStatus(true);
     try {
-      const saved = await saveShowStatus(db, seriesId, status);
-      setSavedShow(saved);
-    } catch {
-      setWatchStatus(previous);
-      Alert.alert('Couldn’t save', 'Your show status was not changed. Please try again.');
+      const next = await library.saveStatus(seriesId, status, { confirmUnrank });
+      setSavedShow(next.savedShows[String(seriesId)] ?? null);
+      setWatchStatus(status);
+      if (status !== 'watched') setRanking(null);
+    } catch (error) {
+      if (error instanceof NeedsUnrankConfirmationError && !confirmUnrank) {
+        if (confirmAction('Remove from your ranking?', error.message)) {
+          try {
+            const next = await library.saveStatus(seriesId, status, { confirmUnrank: true });
+            setSavedShow(next.savedShows[String(seriesId)] ?? null);
+            setWatchStatus(status);
+            setRanking(null);
+          } catch (retryError) {
+            showMessage('Couldn’t save', retryError instanceof Error ? retryError.message : 'Your show status was not changed. Please try again.');
+          }
+        }
+      } else {
+        showMessage('Couldn’t save', error instanceof Error ? error.message : 'Your show status was not changed. Please try again.');
+      }
     } finally {
       setSavingStatus(false);
     }
   };
 
+  const handleStatus = (status: WatchStatus) => {
+    if (ranking && status !== 'watched') {
+      const confirmed = confirmAction(
+        'Remove from your ranking?',
+        `Changing this show to ${status === 'watching' ? 'Watching' : 'Want to Watch'} removes its active TVBeli ranking. Your review will be kept.`,
+      );
+      if (confirmed) void persistStatus(status, true);
+      return;
+    }
+    void persistStatus(status);
+  };
+
   const handleRemove = () => {
-    Alert.alert('Remove from My Shows?', 'This will delete the saved status, personal rating, and review for this show.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        try { await deleteSavedShow(db, seriesId); setSavedShow(null); setWatchStatus(undefined); }
-        catch { Alert.alert('Couldn’t remove show', 'Please try again.'); }
-      } },
-    ]);
+    if (confirmAction('Remove from My Shows?', 'This will delete the saved status, review, and active ranking for this show.')) {
+      void (async () => {
+        try { await library.deleteShow(seriesId); setSavedShow(null); setWatchStatus(undefined); setRanking(null); }
+        catch (error) { showMessage('Couldn’t remove show', error instanceof Error ? error.message : 'Please try again.'); }
+      })();
+    }
   };
 
   const handleRetry = () => {
@@ -211,20 +239,28 @@ export default function ShowDetailScreen() {
             })}
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/rate/[id]', params: { id: seriesId, title: show.title } })}
-            style={({ pressed }) => [styles.rateButton, pressed && styles.rateButtonPressed]}>
-            <AppIcon name={{ ios: 'star.fill', android: 'star', web: 'star' }} color={colors.black} size={22} />
-            <Text numberOfLines={1} style={styles.rateButtonText}>Rate {show.title}</Text>
-            <AppIcon name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }} color={colors.black} size={20} />
-          </Pressable>
+          {ranking ? (
+            <View style={styles.rankingCard}>
+              <View style={styles.rankingTop}><View><Text style={styles.yourTakeTitle}>Your TVBeli ranking</Text><ReactionBadge reaction={ranking.reaction} /></View><TVBeliScoreBadge scoreTenths={ranking.scoreTenths} large /></View>
+              <Text style={styles.overallRank}>#{ranking.overallRank} <Text style={styles.overallLabel}>Overall</Text></Text>
+              {ranking.tieSize > 1 ? <Text style={styles.tieCopy}>True tie with {ranking.tieSize - 1} other {ranking.tieSize === 2 ? 'show' : 'shows'}</Text> : null}
+              <View style={styles.rankingActions}>
+                <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/rate/[id]', params: { id: seriesId, mode: 'rerank' } })} style={styles.secondaryAction}><Text style={styles.secondaryActionText}>Re-rank</Text></Pressable>
+                <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/rate/[id]', params: { id: seriesId, mode: 'change' } })} style={styles.secondaryAction}><Text style={styles.secondaryActionText}>Change reaction</Text></Pressable>
+              </View>
+            </View>
+          ) : watchStatus === 'watched' && !personalLoading ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/rate/[id]', params: { id: seriesId, mode: 'new' } })} style={({ pressed }) => [styles.rateButton, pressed && styles.rateButtonPressed]}>
+              <AppIcon name={{ ios: 'arrow.up.arrow.down', android: 'swap_vert', web: 'swap_vert' }} color={colors.black} size={22} />
+              <Text numberOfLines={1} style={styles.rateButtonText}>Rate & Rank</Text>
+              <AppIcon name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }} color={colors.black} size={20} />
+            </Pressable>
+          ) : !personalLoading ? <Text style={styles.rankHint}>Mark this show Watched to rate and rank it.</Text> : null}
 
-          {savedShow && (savedShow.personalRating !== null || savedShow.review) ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/rate/[id]', params: { id: seriesId, title: show.title } })} style={styles.yourTake}>
-              <View style={styles.yourTakeHeader}><Text style={styles.yourTakeTitle}>Your take</Text>{savedShow.personalRating !== null ? <PersonalRatingBadge rating={savedShow.personalRating} /> : null}</View>
-              {savedShow.review ? <Text style={styles.review} numberOfLines={4}>{savedShow.review}</Text> : null}
-              <Text style={styles.editTake}>Tap to edit</Text>
+          {savedShow ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/review/[id]', params: { id: seriesId, title: show.title } } as unknown as Href)} style={styles.yourTake}>
+              <View style={styles.yourTakeHeader}><Text style={styles.yourTakeTitle}>Personal note</Text><Text style={styles.editTake}>{savedShow.review ? 'Edit' : 'Add'}</Text></View>
+              <Text style={savedShow.review ? styles.review : styles.emptyReview} numberOfLines={4}>{savedShow.review || 'Write something you want to remember about this show.'}</Text>
             </Pressable>
           ) : null}
 
@@ -292,10 +328,20 @@ const styles = StyleSheet.create({
   rateButton: { height: 57, borderRadius: radii.md, backgroundColor: colors.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.md, paddingHorizontal: spacing.md },
   rateButtonText: { flex: 1, color: colors.black, fontSize: 15, fontWeight: '900', textAlign: 'center' },
   rateButtonPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
+  rankHint: { color: colors.textDim, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: spacing.md },
+  rankingCard: { marginTop: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: '#39451C', backgroundColor: '#151A0D', padding: spacing.md },
+  rankingTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
+  overallRank: { color: colors.text, fontSize: 27, fontWeight: '900', letterSpacing: -0.8, marginTop: spacing.md },
+  overallLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', letterSpacing: 0 },
+  tieCopy: { color: colors.lavender, fontSize: 11, fontWeight: '700', marginTop: 3 },
+  rankingActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  secondaryAction: { flex: 1, minHeight: 43, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised, paddingHorizontal: spacing.xs },
+  secondaryActionText: { color: colors.text, fontSize: 11, fontWeight: '800', textAlign: 'center' },
   yourTake: { marginTop: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: spacing.md },
   yourTakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   yourTakeTitle: { color: colors.text, fontSize: 17, fontWeight: '900' },
   review: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginTop: spacing.sm },
+  emptyReview: { color: colors.textDim, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
   editTake: { color: colors.accent, fontSize: 11, fontWeight: '800', marginTop: spacing.sm },
   removeButton: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.xs },
   removeText: { color: colors.coral, fontSize: 12, fontWeight: '800' },

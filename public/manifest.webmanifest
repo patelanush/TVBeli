@@ -1,0 +1,12 @@
+{
+  "name": "TVBeli",
+  "short_name": "TVBeli",
+  "description": "Your personal TV show tracker and preference ranking.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08090C",
+  "theme_color": "#08090C",
+  "icons": [
+    { "src": "/tvbeli-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

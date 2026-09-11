@@ -1,28 +1,32 @@
 import type { TVShow } from '@/types/show';
+import type { RankingInfo, Reaction } from '@/types/ranking';
 
 export type SavedShowStatus = 'watched' | 'watching' | 'want_to_watch';
 
 export type SavedShow = {
   tmdbId: number;
   status: SavedShowStatus;
-  personalRating: number | null;
+  legacyManualRating: number | null;
   review: string;
-  rankPosition: number | null;
-  ratedAt: string | null;
+  legacyRankPosition: number | null;
+  legacyRatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type SavedShowSort = 'recently_added' | 'personal_rating' | 'title';
+export type SavedShowSort = 'recently_added' | 'ranking' | 'title';
 
 export type SavedShowWithMetadata = {
   saved: SavedShow;
   show: TVShow | null;
+  ranking: RankingInfo | null;
 };
 
 export type LibraryStats = {
   watched: number;
   watching: number;
   wantToWatch: number;
-  averageRating: number | null;
+  totalRanked: number;
+  counts: Record<Reaction, number>;
+  averageScore: number | null;
 };
